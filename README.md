@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aerbooking
 
-## Getting Started
+Booking portal built with Next.js and Payload CMS.
 
-First, run the development server:
+## Setup
+
+1. Copy `.env.example` to `.env`.
+2. Set `DATABASE_URI` to a MongoDB connection string and `PAYLOAD_SECRET` to a long random secret.
+3. Set `RESEND_API_KEY` to your Resend API key. Set `RESEND_FROM_EMAIL` to a sender address on a domain verified with Resend; it defaults to `bookings@atitlanecoretreat.com`. `RESEND_FROM_NAME` defaults to `Atitlan Eco Retreat`.
+4. Create a Cloudflare R2 bucket and API token with object read/write permissions. Set `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`.
+5. Set `NEXT_PUBLIC_ASSETS_URL` to the public base URL configured for the R2 bucket. Uploaded Media files use this URL; Resources files use short-lived signed downloads.
+6. Start the app:
+
+   ```bash
+   npm run dev
+   ```
+
+The Payload admin panel is available at `/admin`. Create the first admin account there; public first-user creation is disabled once that account exists. The Payload REST API is mounted at `/api`, GraphQL at `/api/graphql`, and the GraphQL playground at `/api/graphql-playground`.
+
+Payload uses Resend for auth-related messages such as password resets and verification emails.
+
+The CMS includes retreats, accommodations, availability, bookings, resources, and media collections. Retreat, accommodation, availability, resource, and media records can be read publicly; authenticated admins manage records and uploads. Booking records are restricted to authenticated admins. Media image uploads and Resource PDF uploads are stored in R2; Resource downloads use signed URLs.
+
+The booking page accepts `?retreat={retreat-slug}&room={accommodation-slug}` to preselect active records. Missing or invalid slugs leave the corresponding selector available so guests can choose from active retreats and accommodations.
+
+Seed the initial retreats and accommodation inventory after configuring MongoDB:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run seed
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The seed command is safe to rerun: it creates records whose slugs are missing and leaves existing records unchanged.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```
