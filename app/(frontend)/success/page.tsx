@@ -61,9 +61,7 @@ function isValidDate(date: string | undefined): date is string {
   );
 }
 
-export default async function SuccessPage({
-  searchParams,
-}: SuccessPageProps) {
+export default async function SuccessPage({ searchParams }: SuccessPageProps) {
   const { session_id: sessionId } = await searchParams;
 
   if (!sessionId) {
@@ -88,7 +86,7 @@ export default async function SuccessPage({
 
   if (session.payment_status !== "paid") {
     return (
-      <BookingStatus message="We haven&apos;t received confirmation of your payment yet. Please check your confirmation email or contact us for help." />
+      <BookingStatus message="We haven't received confirmation of your payment yet. Please check your confirmation email or contact us for help." />
     );
   }
 
@@ -100,7 +98,7 @@ export default async function SuccessPage({
     session.amount_total == null
   ) {
     return (
-      <BookingStatus message="Your payment was received, but we couldn&apos;t retrieve all of your booking details. Please contact us for help." />
+      <BookingStatus message="Your payment was received, but we couldn't retrieve all of your booking details. Please contact us for help." />
     );
   }
 
@@ -139,7 +137,7 @@ export default async function SuccessPage({
 
   if (result.status === "error") {
     return (
-      <BookingStatus message="Your payment was received, but we couldn&apos;t load your booking details. Please check your confirmation email or contact us for help." />
+      <BookingStatus message="Your payment was received, but we couldn't load your booking details. Please check your confirmation email or contact us for help." />
     );
   }
 
@@ -148,8 +146,10 @@ export default async function SuccessPage({
       <div className="booking-container">
         <section className="booking-selection">
           <div>
-            <p className="booking-eyebrow">Payment received</p>
-            <h2>Thank you for booking with Atitlan Eco Retreat</h2>
+            <p className="booking-eyebrow">Your payment was successful</p>
+            <h2>
+              Thank you for booking your dream retreat with Atitlan Eco Retreat
+            </h2>
             <p className="booking-next-step">
               Your reservation is confirmed. A confirmation email with your
               Welcome Pack link is on its way.

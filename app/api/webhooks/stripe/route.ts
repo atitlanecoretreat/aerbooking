@@ -55,11 +55,19 @@ function formatDate(date: string): string {
 }
 
 export async function POST(request: Request) {
+  console.log("[webhook] Request received");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   const signature = request.headers.get("stripe-signature");
 
   if (!webhookSecret || !signature) {
-    return NextResponse.json({ error: "Webhook not configured" }, { status: 400 });
+    console.error("[webhook] Missing secret or signature", {
+      hasSecret: Boolean(webhookSecret),
+      hasSignature: Boolean(signature),
+    });
+    return NextResponse.json(
+      { error: "Webhook not configured" },
+      { status: 400 },
+    );
   }
 
   const body = await request.text();
@@ -72,6 +80,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  console.log(`[webhook] Verified event ${event.type}`);
+
   if (event.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }
@@ -79,19 +89,32 @@ export async function POST(request: Request) {
   const session = event.data.object as Stripe.Checkout.Session;
 
   if (session.payment_status !== "paid") {
+    console.log(
+      `[webhook] Session ${session.id} not paid: ${session.payment_status}`,
+    );
     return NextResponse.json({ received: true });
   }
 
   const metadata = metadataSchema.safeParse(session.metadata);
 
   if (!metadata.success) {
-    console.error("Checkout session has invalid metadata:", session.id);
-    return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 });
+    console.error(
+      "Checkout session has invalid metadata:",
+      session.id,
+      metadata.error.issues,
+    );
+    return NextResponse.json(
+      { error: "Invalid session metadata" },
+      { status: 400 },
+    );
   }
 
   if (session.amount_total == null) {
     console.error("Paid checkout session is missing its total:", session.id);
-    return NextResponse.json({ error: "Missing session amount" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing session amount" },
+      { status: 400 },
+    );
   }
 
   const data = metadata.data;
@@ -122,7 +145,10 @@ export async function POST(request: Request) {
       room.occupancyType === "double" &&
       (!data.secondaryGuestName || !data.secondaryGuestEmail)
     ) {
-      console.error("Double-occupancy checkout is missing second guest details:", session.id);
+      console.error(
+        "Double-occupancy checkout is missing second guest details:",
+        session.id,
+      );
       return NextResponse.json(
         { error: "Missing second guest details" },
         { status: 400 },
@@ -192,6 +218,10 @@ export async function POST(request: Request) {
       }
     }
 
+    console.log(
+      `[webhook] Booking ${booking.bookingNumber} ready, welcomePackSent=${booking.welcomePackSent}`,
+    );
+
     if (!booking.welcomePackSent) {
       const [retreat, room] = await Promise.all([
         payload.findByID({ collection: "retreats", id: data.retreatId }),
@@ -216,7 +246,9 @@ export async function POST(request: Request) {
       const checkOut = formatDate(data.endDate);
       const guestList = guests.map(escapeHtml).join(", ");
 
-      await payload.sendEmail({
+      console.log("[webhook] Sending confirmation email to", recipients);
+
+      const emailResult = await payload.sendEmail({
         from: {
           name: "Atitlan Eco Retreat",
           address: "hello@atitlanecoretreat.com",
@@ -227,7 +259,7 @@ export async function POST(request: Request) {
         text: [
           `Hello ${guests.join(" and ")},`,
           "",
-          "Your booking is confirmed. Here are your reservation details:",
+          "Your dream retreat booking is confirmed. Here are your reservation details:",
           `Retreat: ${retreat.title}`,
           `Duration: ${retreat.durationDays} days`,
           `Stay: ${room.title}`,
@@ -260,6 +292,8 @@ export async function POST(request: Request) {
         `,
       });
 
+      console.log("[webhook] Resend response:", emailResult);
+
       await payload.update({
         collection: "bookings",
         id: booking.id,
@@ -267,10 +301,18 @@ export async function POST(request: Request) {
       });
     }
 
-    console.log(`Processed booking ${booking.bookingNumber} for ${data.primaryGuestEmail}`);
+    console.log(
+      `Processed booking ${booking.bookingNumber} for ${data.primaryGuestEmail}`,
+    );
   } catch (error) {
-    console.error("Error recording booking in Payload CMS:", error);
-    return NextResponse.json({ error: "Database insertion error" }, { status: 500 });
+    console.error(
+      "[webhook] Error processing booking or sending email:",
+      error,
+    );
+    return NextResponse.json(
+      { error: "Database insertion error" },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ received: true });

@@ -65,26 +65,6 @@ export default buildConfig({
       },
       token: requiredEnv("BLOB_READ_WRITE_TOKEN"),
     }),
-    s3Storage({
-      bucket: requiredEnv("S3_BUCKET"),
-      collections: {
-        resources: {
-          prefix: "resources",
-          signedDownloads: {
-            shouldUseSignedURL: () => true,
-          },
-        },
-      },
-      config: {
-        credentials: {
-          accessKeyId: requiredEnv("S3_ACCESS_KEY_ID"),
-          secretAccessKey: requiredEnv("S3_SECRET_ACCESS_KEY"),
-        },
-        endpoint: requiredEnv("S3_ENDPOINT").replace(/\/+$/, ""),
-        forcePathStyle: true,
-        region: "auto",
-      },
-    }),
   ],
   secret: requiredEnv("PAYLOAD_SECRET"),
   serverURL: requiredEnv("PAYLOAD_PUBLIC_SERVER_URL").replace(/\/+$/, ""),
