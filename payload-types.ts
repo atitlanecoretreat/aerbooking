@@ -248,6 +248,8 @@ export interface Resource {
   title: string;
   version?: string | null;
   instructionsText?: string | null;
+  prefix?: string | null;
+  _objectKey?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -489,6 +491,8 @@ export interface ResourcesSelect<T extends boolean = true> {
   title?: T;
   version?: T;
   instructionsText?: T;
+  prefix?: T;
+  _objectKey?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;

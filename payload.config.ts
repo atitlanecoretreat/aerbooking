@@ -62,6 +62,9 @@ export default buildConfig({
         media: {
           prefix: "media",
         },
+        resources: {
+          prefix: "resources",
+        },
       },
       token: requiredEnv("BLOB_READ_WRITE_TOKEN"),
     }),
