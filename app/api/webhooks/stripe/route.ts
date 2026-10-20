@@ -4,6 +4,8 @@ import { getPayload } from "payload";
 import { z } from "zod";
 import config from "@payload-config";
 import { getStripe } from "@/lib/stripe";
+import type { Booking } from "@/payload-types";
+import { WELCOME_PACK_URL } from "@/lib/booking-constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -16,11 +18,40 @@ const metadataSchema = z.object({
   primaryGuestEmail: z.string().email(),
   primaryGuestPhone: z.string().min(1),
   secondaryGuestName: z.string().optional(),
-  secondaryGuestEmail: z.string().optional(),
+  secondaryGuestEmail: z.string().email().or(z.literal("")).optional(),
 });
 
 function idOf(value: string | { id: string } | null): string | undefined {
   return typeof value === "string" ? value : (value?.id ?? undefined);
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return character;
+    }
+  });
+}
+
+function formatDate(date: string): string {
+  return new Date(`${date}T00:00:00.000Z`).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
 export async function POST(request: Request) {
@@ -58,13 +89,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 });
   }
 
+  if (session.amount_total == null) {
+    console.error("Paid checkout session is missing its total:", session.id);
+    return NextResponse.json({ error: "Missing session amount" }, { status: 400 });
+  }
+
   const data = metadata.data;
   const paymentIntentId = idOf(session.payment_intent);
 
   try {
     const payload = await getPayload({ config });
 
-    // Stripe retries webhooks, so skip sessions that already produced a booking.
+    // Stripe retries webhooks; reuse an existing booking without incrementing inventory twice.
+    let booking: Booking | undefined;
     if (paymentIntentId) {
       const existing = await payload.find({
         collection: "bookings",
@@ -72,71 +109,165 @@ export async function POST(request: Request) {
         limit: 1,
       });
 
-      if (existing.docs.length > 0) {
-        return NextResponse.json({ received: true });
+      booking = existing.docs[0];
+    }
+
+    const startDate = new Date(`${data.startDate}T00:00:00.000Z`);
+    const room = await payload.findByID({
+      collection: "accommodations",
+      id: data.roomId,
+    });
+
+    if (
+      room.occupancyType === "double" &&
+      (!data.secondaryGuestName || !data.secondaryGuestEmail)
+    ) {
+      console.error("Double-occupancy checkout is missing second guest details:", session.id);
+      return NextResponse.json(
+        { error: "Missing second guest details" },
+        { status: 400 },
+      );
+    }
+
+    if (!booking) {
+      const bookingNumber = `AER-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      booking = await payload.create({
+        collection: "bookings",
+        data: {
+          bookingNumber,
+          primaryGuestName: data.primaryGuestName,
+          primaryGuestEmail: data.primaryGuestEmail,
+          primaryGuestPhone: data.primaryGuestPhone,
+          secondaryGuestName: data.secondaryGuestName || undefined,
+          secondaryGuestEmail: data.secondaryGuestEmail || undefined,
+          retreat: data.retreatId,
+          accommodation: data.roomId,
+          startDate: startDate.toISOString(),
+          endDate: new Date(`${data.endDate}T00:00:00.000Z`).toISOString(),
+          totalAmountPaid: session.amount_total / 100,
+          currency: session.currency?.toUpperCase() ?? "USD",
+          stripePaymentIntentId: paymentIntentId,
+          stripeCustomerId: idOf(session.customer),
+          paymentStatus: "paid",
+          welcomePackSent: false,
+        },
+      });
+
+      const existingAvailability = await payload.find({
+        collection: "availability",
+        where: {
+          and: [
+            { accommodation: { equals: data.roomId } },
+            { startDate: { greater_than_equal: startDate.toISOString() } },
+            {
+              startDate: {
+                less_than: new Date(startDate.getTime() + DAY_MS).toISOString(),
+              },
+            },
+          ],
+        },
+        limit: 1,
+      });
+      const record = existingAvailability.docs[0];
+      const spotsBooked = (record?.spotsBooked ?? 0) + 1;
+      const spotsRemaining = Math.max(0, room.totalCapacityUnits - spotsBooked);
+
+      if (record) {
+        await payload.update({
+          collection: "availability",
+          id: record.id,
+          data: { spotsBooked, spotsRemaining },
+        });
+      } else {
+        await payload.create({
+          collection: "availability",
+          data: {
+            startDate: startDate.toISOString(),
+            accommodation: data.roomId,
+            spotsBooked,
+            spotsRemaining,
+          },
+        });
       }
     }
 
-    const bookingNumber = `AER-${Math.floor(100000 + Math.random() * 900000)}`;
-    const startDate = new Date(`${data.startDate}T00:00:00.000Z`);
+    if (!booking.welcomePackSent) {
+      const [retreat, room] = await Promise.all([
+        payload.findByID({ collection: "retreats", id: data.retreatId }),
+        payload.findByID({ collection: "accommodations", id: data.roomId }),
+      ]);
+      const guests = [
+        data.primaryGuestName,
+        ...(data.secondaryGuestName ? [data.secondaryGuestName] : []),
+      ];
+      const recipients = [
+        data.primaryGuestEmail,
+        ...(room.occupancyType === "double" && data.secondaryGuestEmail
+          ? [data.secondaryGuestEmail]
+          : []),
+      ];
+      const currency = session.currency?.toUpperCase() ?? "USD";
+      const amountPaid = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency,
+      }).format(session.amount_total / 100);
+      const checkIn = formatDate(data.startDate);
+      const checkOut = formatDate(data.endDate);
+      const guestList = guests.map(escapeHtml).join(", ");
 
-    await payload.create({
-      collection: "bookings",
-      data: {
-        bookingNumber,
-        primaryGuestName: data.primaryGuestName,
-        primaryGuestEmail: data.primaryGuestEmail,
-        primaryGuestPhone: data.primaryGuestPhone,
-        secondaryGuestName: data.secondaryGuestName || undefined,
-        secondaryGuestEmail: data.secondaryGuestEmail || undefined,
-        retreat: data.retreatId,
-        accommodation: data.roomId,
-        startDate: startDate.toISOString(),
-        endDate: new Date(`${data.endDate}T00:00:00.000Z`).toISOString(),
-        totalAmountPaid: (session.amount_total ?? 0) / 100,
-        currency: "USD",
-        stripePaymentIntentId: paymentIntentId,
-        stripeCustomerId: idOf(session.customer),
-        paymentStatus: "paid",
-        welcomePackSent: false,
-      },
-    });
-
-    const room = await payload.findByID({ collection: "accommodations", id: data.roomId });
-    const existingAvailability = await payload.find({
-      collection: "availability",
-      where: {
-        and: [
-          { accommodation: { equals: data.roomId } },
-          { startDate: { greater_than_equal: startDate.toISOString() } },
-          { startDate: { less_than: new Date(startDate.getTime() + DAY_MS).toISOString() } },
-        ],
-      },
-      limit: 1,
-    });
-    const record = existingAvailability.docs[0];
-    const spotsBooked = (record?.spotsBooked ?? 0) + 1;
-    const spotsRemaining = Math.max(0, room.totalCapacityUnits - spotsBooked);
-
-    if (record) {
-      await payload.update({
-        collection: "availability",
-        id: record.id,
-        data: { spotsBooked, spotsRemaining },
-      });
-    } else {
-      await payload.create({
-        collection: "availability",
-        data: {
-          startDate: startDate.toISOString(),
-          accommodation: data.roomId,
-          spotsBooked,
-          spotsRemaining,
+      await payload.sendEmail({
+        from: {
+          name: "Atitlan Eco Retreat",
+          address: "hello@atitlanecoretreat.com",
         },
+        to: recipients[0],
+        ...(recipients.length > 1 ? { bcc: recipients.slice(1) } : {}),
+        subject: "Your Atitlan Eco Retreat booking is confirmed",
+        text: [
+          `Hello ${guests.join(" and ")},`,
+          "",
+          "Your booking is confirmed. Here are your reservation details:",
+          `Retreat: ${retreat.title}`,
+          `Duration: ${retreat.durationDays} days`,
+          `Stay: ${room.title}`,
+          `Amount paid: ${amountPaid}`,
+          `Occupancy: ${room.occupancyType === "double" ? "2 guests" : "1 guest"}`,
+          `Guests: ${guests.join(", ")}`,
+          `Check-in: ${checkIn}`,
+          `Check-out: ${checkOut}`,
+          "",
+          `Welcome Pack: ${WELCOME_PACK_URL}`,
+          "",
+          "We look forward to welcoming you.",
+          "Atitlan Eco Retreat",
+        ].join("\n"),
+        html: `
+          <p>Hello ${guests.map(escapeHtml).join(" and ")},</p>
+          <p>Your booking is confirmed. Here are your reservation details:</p>
+          <ul>
+            <li><strong>Retreat:</strong> ${escapeHtml(retreat.title)}</li>
+            <li><strong>Duration:</strong> ${retreat.durationDays} days</li>
+            <li><strong>Stay:</strong> ${escapeHtml(room.title)}</li>
+            <li><strong>Amount paid:</strong> ${escapeHtml(amountPaid)}</li>
+            <li><strong>Occupancy:</strong> ${room.occupancyType === "double" ? "2 guests" : "1 guest"}</li>
+            <li><strong>Guests:</strong> ${guestList}</li>
+            <li><strong>Check-in:</strong> ${escapeHtml(checkIn)}</li>
+            <li><strong>Check-out:</strong> ${escapeHtml(checkOut)}</li>
+          </ul>
+          <p><a href="${WELCOME_PACK_URL}">Open your Welcome Pack</a></p>
+          <p>We look forward to welcoming you.<br />Atitlan Eco Retreat</p>
+        `,
+      });
+
+      await payload.update({
+        collection: "bookings",
+        id: booking.id,
+        data: { welcomePackSent: true },
       });
     }
 
-    console.log(`Processed booking ${bookingNumber} for ${data.primaryGuestEmail}`);
+    console.log(`Processed booking ${booking.bookingNumber} for ${data.primaryGuestEmail}`);
   } catch (error) {
     console.error("Error recording booking in Payload CMS:", error);
     return NextResponse.json({ error: "Database insertion error" }, { status: 500 });

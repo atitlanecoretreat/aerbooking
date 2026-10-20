@@ -101,15 +101,15 @@ Rather than hosting multiple checkout pages, the app operates on a **single dyna
 
 ## 🧱 Tech Stack
 
-| Layer                    | Technology                           |
-| :----------------------- | :----------------------------------- |
-| **Framework**            | Next.js (App Router, React 19)       |
-| **Language**             | TypeScript                           |
-| **CMS & Database**       | Payload CMS 3.x + MongoDB Atlas      |
-| **Payments**             | Stripe Checkout API / Webhooks       |
-| **Storage**              | Cloudflare R2 (`@aws-sdk/client-s3`) |
-| **Transactional Emails** | Resend                               |
-| **UI & Styling**         | Custom Global CSS                    |
+| Layer                    | Technology                      |
+| :----------------------- | :------------------------------ |
+| **Framework**            | Next.js (App Router, React 19)  |
+| **Language**             | TypeScript                      |
+| **CMS & Database**       | Payload CMS 3.x + MongoDB Atlas |
+| **Payments**             | Stripe Checkout API / Webhooks  |
+| **Storage**              | Vercel Blob                     |
+| **Transactional Emails** | Resend                          |
+| **UI & Styling**         | Custom Global CSS               |
 
 ---
 

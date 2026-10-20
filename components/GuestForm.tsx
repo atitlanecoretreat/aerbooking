@@ -27,8 +27,14 @@ const baseSchema = z.object({
 });
 
 const doubleSchema = baseSchema.extend({
-  secondaryGuestName: z.string().trim().min(1, "Second guest name is required."),
-  secondaryGuestEmail: z.string().trim().email("Enter a valid email for the second guest."),
+  secondaryGuestName: z
+    .string()
+    .trim()
+    .min(1, "Second guest name is required."),
+  secondaryGuestEmail: z
+    .string()
+    .trim()
+    .email("Enter a valid email for the second guest."),
 });
 
 const initialData: GuestFormData = {
@@ -65,7 +71,11 @@ export function GuestForm({
     setError(null);
     const data: GuestFormData = isDouble
       ? result.data
-      : { ...result.data, secondaryGuestName: undefined, secondaryGuestEmail: undefined };
+      : {
+          ...result.data,
+          secondaryGuestName: undefined,
+          secondaryGuestEmail: undefined,
+        };
     onSubmitGuestInfo(data);
   };
 
@@ -113,29 +123,32 @@ export function GuestForm({
       {isDouble && (
         <div className="double-occupancy-section">
           <h4>Second Guest Details (Double Occupancy Room)</h4>
+          <div className="booking-fields">
+            <div className="booking-field">
+              <label htmlFor="secondaryGuestName">
+                Second Guest Full Name *
+              </label>
+              <input
+                type="text"
+                id="secondaryGuestName"
+                name="secondaryGuestName"
+                required
+                value={formData.secondaryGuestName}
+                onChange={handleChange}
+              />
+            </div>
 
-          <div className="booking-field">
-            <label htmlFor="secondaryGuestName">Second Guest Full Name *</label>
-            <input
-              type="text"
-              id="secondaryGuestName"
-              name="secondaryGuestName"
-              required
-              value={formData.secondaryGuestName}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div className="booking-field">
-            <label htmlFor="secondaryGuestEmail">Second Guest Email *</label>
-            <input
-              type="email"
-              id="secondaryGuestEmail"
-              name="secondaryGuestEmail"
-              required
-              value={formData.secondaryGuestEmail}
-              onChange={handleChange}
-            />
+            <div className="booking-field">
+              <label htmlFor="secondaryGuestEmail">Second Guest Email *</label>
+              <input
+                type="email"
+                id="secondaryGuestEmail"
+                name="secondaryGuestEmail"
+                required
+                value={formData.secondaryGuestEmail}
+                onChange={handleChange}
+              />
+            </div>
           </div>
         </div>
       )}

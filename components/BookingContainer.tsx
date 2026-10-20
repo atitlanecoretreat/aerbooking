@@ -8,10 +8,17 @@ import type { Accommodation, Retreat } from "@/payload-types";
 interface BookingContainerProps {
   selectedRetreat: Retreat;
   selectedRoom: Accommodation;
+  price: number | null;
 }
 
-export function BookingContainer({ selectedRetreat, selectedRoom }: BookingContainerProps) {
-  const [selectedDates, setSelectedDates] = useState<SelectedDates | null>(null);
+export function BookingContainer({
+  selectedRetreat,
+  selectedRoom,
+  price,
+}: BookingContainerProps) {
+  const [selectedDates, setSelectedDates] = useState<SelectedDates | null>(
+    null,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
@@ -44,7 +51,9 @@ export function BookingContainer({ selectedRetreat, selectedRoom }: BookingConta
 
       window.location.assign(data.url);
     } catch (error) {
-      setCheckoutError(error instanceof Error ? error.message : "Unable to start checkout.");
+      setCheckoutError(
+        error instanceof Error ? error.message : "Unable to start checkout.",
+      );
       setIsSubmitting(false);
     }
   };
@@ -63,9 +72,14 @@ export function BookingContainer({ selectedRetreat, selectedRoom }: BookingConta
             <dd>{selectedRetreat.durationDays} days</dd>
           </div>
           <div>
-            <dt>Check-in</dt>
+            <dt>Amount to pay</dt>
             <dd>
-              {selectedRetreat.startDayRestriction === "sunday_only" ? "Sunday only" : "Any day"}
+              {price == null
+                ? "Price unavailable"
+                : new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                  }).format(price)}
             </dd>
           </div>
           <div>
@@ -74,7 +88,9 @@ export function BookingContainer({ selectedRetreat, selectedRoom }: BookingConta
           </div>
           <div>
             <dt>Occupancy</dt>
-            <dd>{selectedRoom.occupancyType === "double" ? "2 guests" : "1 guest"}</dd>
+            <dd>
+              {selectedRoom.occupancyType === "double" ? "2 guests" : "1 guest"}
+            </dd>
           </div>
         </dl>
         <DatePicker
@@ -84,14 +100,12 @@ export function BookingContainer({ selectedRetreat, selectedRoom }: BookingConta
           startDayRestriction={selectedRetreat.startDayRestriction}
           onDateSelect={setSelectedDates}
         />
-        {selectedDates ? (
+        {selectedDates && (
           <GuestForm
             occupancyType={selectedRoom.occupancyType}
             onSubmitGuestInfo={handleSubmitGuestInfo}
             isSubmitting={isSubmitting}
           />
-        ) : (
-          <p className="booking-next-step">Choose an available check-in date to continue.</p>
         )}
         {checkoutError && (
           <p className="form-error" role="alert">

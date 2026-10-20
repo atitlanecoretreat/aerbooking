@@ -2,6 +2,7 @@ import { mongooseAdapter } from "@payloadcms/db-mongodb";
 import { resendAdapter } from "@payloadcms/email-resend";
 import { lexicalEditor } from "@payloadcms/richtext-lexical";
 import { s3Storage } from "@payloadcms/storage-s3";
+import { vercelBlobStorage } from "@payloadcms/storage-vercel-blob";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildConfig } from "payload";
@@ -26,19 +27,6 @@ const requiredEnv = (key: string): string => {
   }
 
   return value;
-};
-
-const publicAssetsURL = requiredEnv("NEXT_PUBLIC_ASSETS_URL").replace(/\/+$/, "");
-
-const generatePublicAssetURL = ({
-  filename,
-  prefix,
-}: {
-  filename: string;
-  prefix?: string;
-}): string => {
-  const pathParts = [...(prefix?.split("/").filter(Boolean) ?? []), filename];
-  return `${publicAssetsURL}/${pathParts.map(encodeURIComponent).join("/")}`;
 };
 
 export default buildConfig({
@@ -69,13 +57,17 @@ export default buildConfig({
     defaultFromName: process.env.RESEND_FROM_NAME ?? "Atitlan Eco Retreat",
   }),
   plugins: [
+    vercelBlobStorage({
+      collections: {
+        media: {
+          prefix: "media",
+        },
+      },
+      token: requiredEnv("BLOB_READ_WRITE_TOKEN"),
+    }),
     s3Storage({
       bucket: requiredEnv("S3_BUCKET"),
       collections: {
-        media: {
-          generateFileURL: generatePublicAssetURL,
-          prefix: "media",
-        },
         resources: {
           prefix: "resources",
           signedDownloads: {

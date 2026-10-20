@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 export interface SelectedDates {
   startDate: Date;
@@ -28,9 +29,43 @@ export function DatePicker({
 }: DatePickerProps) {
   const [selectedStartDate, setSelectedStartDate] = useState("");
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
+  const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(
+    null,
+  );
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const today = new Date();
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const daysInMonth = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth() + 1,
+    0,
+  ).getDate();
+  const firstWeekday = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth(),
+    1,
+  ).getDay();
+  const calendarDays: (Date | null)[] = [
+    ...Array<Date | null>(firstWeekday).fill(null),
+    ...Array.from(
+      { length: daysInMonth },
+      (_, index) =>
+        new Date(
+          visibleMonth.getFullYear(),
+          visibleMonth.getMonth(),
+          index + 1,
+        ),
+    ),
+  ];
 
   const calculateEndDate = (start: Date): Date => {
     const end = new Date(start);
@@ -43,6 +78,13 @@ export function DatePicker({
     setIsAvailable(null);
     setAvailabilityMessage(null);
     onDateSelect(null);
+  };
+
+  const changeMonth = (monthOffset: number) => {
+    setVisibleMonth(
+      (month) =>
+        new Date(month.getFullYear(), month.getMonth() + monthOffset, 1),
+    );
   };
 
   const handleDateChange = async (dateStr: string) => {
@@ -59,7 +101,9 @@ export function DatePicker({
     if (startDayRestriction === "sunday_only" && startDate.getDay() !== 0) {
       setEndDate(null);
       setIsAvailable(false);
-      setAvailabilityMessage("This retreat requires a Sunday check-in. Please select a Sunday.");
+      setAvailabilityMessage(
+        "This retreat requires a Sunday check-in. Please select a Sunday.",
+      );
       onDateSelect(null);
       return;
     }
@@ -75,11 +119,14 @@ export function DatePicker({
       const res = await fetch(
         `/api/check-availability?accommodationId=${encodeURIComponent(accommodationId)}&startDate=${dateStr}`,
       );
-      const data: { available?: boolean; spotsRemaining?: number } = await res.json();
+      const data: { available?: boolean; spotsRemaining?: number } =
+        await res.json();
 
       if (res.ok && data.available) {
         setIsAvailable(true);
-        setAvailabilityMessage(`Available! (${data.spotsRemaining} spots remaining)`);
+        setAvailabilityMessage(
+          `Available! (${data.spotsRemaining} spots remaining)`,
+        );
         onDateSelect({ startDate, endDate: calculatedEnd });
       } else {
         setIsAvailable(false);
@@ -92,7 +139,9 @@ export function DatePicker({
       }
     } catch {
       setIsAvailable(false);
-      setAvailabilityMessage("Unable to verify availability. Please try again.");
+      setAvailabilityMessage(
+        "Unable to verify availability. Please try again.",
+      );
       onDateSelect(null);
     } finally {
       setIsChecking(false);
@@ -101,49 +150,163 @@ export function DatePicker({
 
   return (
     <div className="date-picker">
-      <h3>Select Your Check-in Date</h3>
-      <p className="date-picker-note">
-        {startDayRestriction === "sunday_only"
-          ? "Check-ins for this retreat are strictly on Sundays."
-          : "You can check in on any day of the week."}
-      </p>
-
-      <div className="booking-field">
-        <label htmlFor="checkin-date">Check-in Date</label>
-        <input
-          id="checkin-date"
-          type="date"
-          value={selectedStartDate}
-          min={toDateInputValue(new Date())}
-          disabled={isChecking}
-          onChange={(event) => handleDateChange(event.target.value)}
-        />
-      </div>
-
-      {endDate && (
-        <div className="date-summary">
-          <p>
-            <strong>Check-out Date:</strong>{" "}
-            {endDate.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
-        </div>
-      )}
-
-      {availabilityMessage && (
-        <p
-          className={`availability-status${
-            isAvailable === true ? " is-available" : isAvailable === false ? " is-unavailable" : ""
-          }`}
-          role="status"
-        >
-          {availabilityMessage}
+      <div className="date-picker-left">
+        <h3>Select Your Check-in Date</h3>
+        <p className="date-picker-note">
+          {startDayRestriction === "sunday_only"
+            ? "Check-ins for this retreat are strictly on Sundays."
+            : "You can check in on any day of the week."}
         </p>
-      )}
+
+        <div className="date-calendar">
+          <div className="calendar-heading">
+            <span id="checkin-date-label">
+              Choose an available check-in date to book your stay.
+            </span>
+            <div className="calendar-navigation">
+              <button
+                type="button"
+                aria-label="Previous month"
+                disabled={
+                  visibleMonth.getFullYear() === today.getFullYear() &&
+                  visibleMonth.getMonth() <= today.getMonth()
+                }
+                onClick={() => changeMonth(-1)}
+              >
+                <span aria-hidden="true">&lsaquo;</span>
+              </button>
+              <h4 aria-live="polite">
+                {visibleMonth.toLocaleDateString("en-US", {
+                  month: "long",
+                  year: "numeric",
+                })}
+              </h4>
+              <button
+                type="button"
+                aria-label="Next month"
+                onClick={() => changeMonth(1)}
+              >
+                <span aria-hidden="true">&rsaquo;</span>
+              </button>
+            </div>
+          </div>
+          <div
+            className="calendar-grid"
+            role="group"
+            aria-labelledby="checkin-date-label"
+            aria-busy={isChecking}
+          >
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+              (weekday) => (
+                <span
+                  className="calendar-weekday"
+                  key={weekday}
+                  aria-hidden="true"
+                >
+                  {weekday}
+                </span>
+              ),
+            )}
+            {calendarDays.map((date, index) => {
+              if (!date) {
+                return (
+                  <span
+                    className="calendar-day-spacer"
+                    key={`empty-${index}`}
+                    aria-hidden="true"
+                  />
+                );
+              }
+
+              const dateValue = toDateInputValue(date);
+              const isRestrictedDay =
+                startDayRestriction === "sunday_only" && date.getDay() !== 0;
+
+              return (
+                <button
+                  className={`calendar-day${selectedStartDate === dateValue ? " is-selected" : ""}`}
+                  key={dateValue}
+                  type="button"
+                  aria-label={date.toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                  aria-pressed={selectedStartDate === dateValue}
+                  disabled={isChecking || date < todayStart || isRestrictedDay}
+                  onClick={() => handleDateChange(dateValue)}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {endDate && (
+          <div className="date-summary">
+            <p>
+              <strong>Check-out Date:</strong>{" "}
+              {endDate.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </p>
+          </div>
+        )}
+
+        {availabilityMessage && (
+          <p
+            className={`availability-status${
+              isAvailable === true
+                ? " is-available"
+                : isAvailable === false
+                  ? " is-unavailable"
+                  : ""
+            }`}
+            role="status"
+          >
+            {availabilityMessage}
+          </p>
+        )}
+      </div>
+      <div className="date-picker-right">
+        <div className="date-picker-image">
+          <Image
+            src="/view.jpg"
+            alt="View from Atitlan Eco Retreat"
+            fill
+            sizes="(max-width: 680px) 40vw, 22vw"
+          />
+        </div>
+        <div className="date-picker-image">
+          <Image
+            src="/food.jpg"
+            alt="Food served at the retreat"
+            fill
+            sizes="(max-width: 680px) 40vw, 22vw"
+          />
+        </div>
+        <div className="date-picker-image">
+          <Image
+            src="/cafe.jpg"
+            alt="Cafe at Atitlan Eco Retreat"
+            fill
+            sizes="(max-width: 680px) 40vw, 22vw"
+          />
+        </div>
+        <div className="date-picker-image">
+          <Image
+            src="/cafe-inside.jpg"
+            alt="Inside the retreat cafe"
+            fill
+            sizes="(max-width: 680px) 40vw, 22vw"
+          />
+        </div>
+      </div>
     </div>
   );
 }
