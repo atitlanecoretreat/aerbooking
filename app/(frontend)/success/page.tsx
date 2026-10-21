@@ -3,7 +3,7 @@ import type Stripe from "stripe";
 import { getPayload } from "payload";
 import config from "@payload-config";
 import { getStripe } from "@/lib/stripe";
-import { WELCOME_PACK_URL } from "@/lib/booking-constants";
+import { LIABILITY_FORM_URL, WELCOME_PACK_URL } from "@/lib/booking-constants";
 
 interface SuccessPageProps {
   searchParams: Promise<{ session_id?: string }>;
@@ -184,16 +184,24 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
               <dd>{formatDate(result.endDate)}</dd>
             </div>
           </dl>
-
-          <a
-            className="success-welcome-pack"
-            href={WELCOME_PACK_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open your Welcome Pack
-          </a>
-
+          <div className="button-group">
+            <a
+              className="success-welcome-pack"
+              href={WELCOME_PACK_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open your Welcome Pack
+            </a>
+            <a
+              className="success-welcome-pack"
+              href={LIABILITY_FORM_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open the Liability Form
+            </a>
+          </div>
           <div className="success-image-grid" aria-label="Retreat photos">
             <div className="success-image">
               <Image

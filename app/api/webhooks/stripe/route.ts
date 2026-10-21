@@ -5,7 +5,7 @@ import { z } from "zod";
 import config from "@payload-config";
 import { getStripe } from "@/lib/stripe";
 import type { Booking } from "@/payload-types";
-import { WELCOME_PACK_URL } from "@/lib/booking-constants";
+import { LIABILITY_FORM_URL, WELCOME_PACK_URL } from "@/lib/booking-constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INTERNAL_NOTIFICATION_EMAIL = "atitlanecoretreat@gmail.com";
@@ -295,7 +295,8 @@ export async function POST(request: Request) {
             <li><strong>Check-in:</strong> ${escapeHtml(checkIn)}</li>
             <li><strong>Check-out:</strong> ${escapeHtml(checkOut)}</li>
           </ul>
-          <p><a href="${WELCOME_PACK_URL}">Open your Welcome Pack</a></p>
+          <p><a href="${WELCOME_PACK_URL}">Open your Welcome Pack with all the relevant info you need to prepare yourself adequately for your dream retreat</a></p>
+          <p><a href="${LIABILITY_FORM_URL}">The liability form you need to fill to attend the retreat</a></p>
           <p>We look forward to welcoming you.<br />Atitlan Eco Retreat</p>
         `,
       });
