@@ -8,6 +8,7 @@ import type { Booking } from "@/payload-types";
 import { WELCOME_PACK_URL } from "@/lib/booking-constants";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const INTERNAL_NOTIFICATION_EMAIL = "atitlanecoretreat@gmail.com";
 
 const metadataSchema = z.object({
   retreatId: z.string().min(1),
@@ -222,7 +223,11 @@ export async function POST(request: Request) {
       `[webhook] Booking ${booking.bookingNumber} ready, welcomePackSent=${booking.welcomePackSent}`,
     );
 
-    if (!booking.welcomePackSent) {
+    if (booking.welcomePackSent) {
+      console.log(
+        `[webhook] Skipping emails: booking ${booking.bookingNumber} already has welcomePackSent=true (Stripe retry or earlier send). Session ${session.id}`,
+      );
+    } else {
       const [retreat, room] = await Promise.all([
         payload.findByID({ collection: "retreats", id: data.retreatId }),
         payload.findByID({ collection: "accommodations", id: data.roomId }),
@@ -246,7 +251,10 @@ export async function POST(request: Request) {
       const checkOut = formatDate(data.endDate);
       const guestList = guests.map(escapeHtml).join(", ");
 
-      console.log("[webhook] Sending confirmation email to", recipients);
+      console.log("[webhook] Sending confirmation email to", recipients, {
+        hasResendKey: Boolean(process.env.RESEND_API_KEY),
+        from: process.env.RESEND_FROM_EMAIL ?? "hello@atitlanecoretreat.com",
+      });
 
       const emailResult = await payload.sendEmail({
         from: {
@@ -299,6 +307,66 @@ export async function POST(request: Request) {
         id: booking.id,
         data: { welcomePackSent: true },
       });
+
+      // Internal notification; failures must not trigger a webhook retry (guest email already sent).
+      try {
+        console.log(
+          "[webhook] Sending internal notification to",
+          INTERNAL_NOTIFICATION_EMAIL,
+        );
+        const stripeLines = [
+          `Stripe Checkout Session ID: ${session.id}`,
+          `Stripe Payment Intent ID: ${paymentIntentId ?? "N/A"}`,
+        ];
+        const internalResult = await payload.sendEmail({
+          from: {
+            name: "Atitlan Eco Retreat",
+            address: "hello@atitlanecoretreat.com",
+          },
+          to: INTERNAL_NOTIFICATION_EMAIL,
+          subject: "Retreat booked on AER's website",
+          headers: { "X-AER-Label": "Customer booked" },
+          text: [
+            `Booking number: ${booking.bookingNumber}`,
+            ...stripeLines,
+            "",
+            `Guest email(s): ${recipients.join(", ")}`,
+            `Guest phone: ${data.primaryGuestPhone}`,
+            `Retreat: ${retreat.title}`,
+            `Duration: ${retreat.durationDays} days`,
+            `Stay: ${room.title}`,
+            `Amount paid: ${amountPaid}`,
+            `Occupancy: ${room.occupancyType === "double" ? "2 guests" : "1 guest"}`,
+            `Guests: ${guests.join(", ")}`,
+            `Check-in: ${checkIn}`,
+            `Check-out: ${checkOut}`,
+          ].join("\n"),
+          html: `
+            <p>A retreat was booked on the AER website.</p>
+            <ul>
+              <li><strong>Booking number:</strong> ${escapeHtml(booking.bookingNumber)}</li>
+              <li><strong>Stripe Checkout Session ID:</strong> ${escapeHtml(session.id)}</li>
+              <li><strong>Stripe Payment Intent ID:</strong> ${escapeHtml(paymentIntentId ?? "N/A")}</li>
+              <li><strong>Guest email(s):</strong> ${recipients.map(escapeHtml).join(", ")}</li>
+              <li><strong>Guest phone:</strong> ${escapeHtml(data.primaryGuestPhone)}</li>
+              <li><strong>Retreat:</strong> ${escapeHtml(retreat.title)}</li>
+              <li><strong>Duration:</strong> ${retreat.durationDays} days</li>
+              <li><strong>Stay:</strong> ${escapeHtml(room.title)}</li>
+              <li><strong>Amount paid:</strong> ${escapeHtml(amountPaid)}</li>
+              <li><strong>Occupancy:</strong> ${room.occupancyType === "double" ? "2 guests" : "1 guest"}</li>
+              <li><strong>Guests:</strong> ${guestList}</li>
+              <li><strong>Check-in:</strong> ${escapeHtml(checkIn)}</li>
+              <li><strong>Check-out:</strong> ${escapeHtml(checkOut)}</li>
+            </ul>
+          `,
+        });
+        console.log(
+          "[webhook] Internal notification response:",
+          internalResult,
+        );
+      } catch (error) {
+        console.error("[webhook] Failed to send internal notification:", error);
+      }
     }
 
     console.log(

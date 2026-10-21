@@ -80,7 +80,7 @@ Rather than hosting multiple checkout pages, the app operates on a **single dyna
    - Fields: `email`, `name`, `roles` (`admin`)
 
 2. **`Retreats`**
-   - Fields: `title`, `slug`, `durationDays`, `startDayRestriction` (`any` or `sunday_only`), `description`, `active`
+   - Fields: `title`, `slug`, `durationDays`, `startDayRestriction` (`any`, `sunday_only` or `sunday_to_thursday`), `description`, `active`
 
 3. **`Accommodations`**
    - Fields: `title`, `slug`, `occupancyType` (`single` or `double`), `totalCapacityUnits`, `active`

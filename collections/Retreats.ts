@@ -36,6 +36,7 @@ export const Retreats: CollectionConfig = {
       name: "startDayRestriction",
       options: [
         { label: "Sunday Only", value: "sunday_only" },
+        { label: "Sunday to Thursday", value: "sunday_to_thursday" },
         { label: "Any Day", value: "any" },
       ],
       required: true,

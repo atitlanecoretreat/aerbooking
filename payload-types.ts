@@ -166,7 +166,7 @@ export interface Retreat {
   title: string;
   slug: string;
   durationDays: number;
-  startDayRestriction: 'sunday_only' | 'any';
+  startDayRestriction: 'sunday_only' | 'sunday_to_thursday' | 'any';
   description?: string | null;
   active: boolean;
   updatedAt: string;

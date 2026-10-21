@@ -52,6 +52,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This retreat requires a Sunday check-in" }, { status: 400 });
   }
 
+  if (retreat.startDayRestriction === "sunday_to_thursday" && dayStart.getUTCDay() > 4) {
+    return NextResponse.json(
+      { error: "This retreat requires a check-in from Sunday to Thursday" },
+      { status: 400 },
+    );
+  }
+
   if (room.occupancyType === "double" && (!body.secondaryGuestName || !body.secondaryGuestEmail)) {
     return NextResponse.json({ error: "Second guest details are required" }, { status: 400 });
   }

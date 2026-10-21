@@ -8,7 +8,7 @@ const retreats = [
     title: "4-Day Yoga Wellness",
     slug: "yoga-wellness-4",
     durationDays: 4,
-    startDayRestriction: "any",
+    startDayRestriction: "sunday_to_thursday",
     active: true,
   },
   {
@@ -135,12 +135,74 @@ const seedDatabase = async (): Promise<void> => {
       accommodationsCreated += 1;
     }
 
+    // Placeholder prices and Stripe price IDs; replace with real values in the admin panel.
+    let pricingCreated = 0;
+    let pricingSkipped = 0;
+
+    for (const retreat of retreats) {
+      for (const accommodation of accommodations) {
+        const [retreatDoc, accommodationDoc] = await Promise.all([
+          payload.find({
+            collection: "retreats",
+            limit: 1,
+            overrideAccess: true,
+            where: { slug: { equals: retreat.slug } },
+          }),
+          payload.find({
+            collection: "accommodations",
+            limit: 1,
+            overrideAccess: true,
+            where: { slug: { equals: accommodation.slug } },
+          }),
+        ]);
+        const retreatId = retreatDoc.docs[0]?.id;
+        const accommodationId = accommodationDoc.docs[0]?.id;
+
+        if (!retreatId || !accommodationId) {
+          throw new Error(
+            `Missing retreat or accommodation for ${retreat.slug} / ${accommodation.slug}`,
+          );
+        }
+
+        const existing = await payload.find({
+          collection: "pricing",
+          limit: 1,
+          overrideAccess: true,
+          where: {
+            and: [
+              { retreat: { equals: retreatId } },
+              { accommodation: { equals: accommodationId } },
+            ],
+          },
+        });
+
+        if (existing.docs.length > 0) {
+          pricingSkipped += 1;
+          continue;
+        }
+
+        await payload.create({
+          collection: "pricing",
+          data: {
+            retreat: retreatId,
+            accommodation: accommodationId,
+            price: Math.floor(Math.random() * 1500) + 200,
+            stripePriceID: `price_placeholder_${retreat.slug}_${accommodation.slug}`,
+          },
+          overrideAccess: true,
+        });
+        pricingCreated += 1;
+      }
+    }
+
     payload.logger.info({
       msg: "Database seeding completed.",
       retreatsCreated,
       retreatsSkipped: retreats.length - retreatsCreated,
       accommodationsCreated,
       accommodationsSkipped: accommodations.length - accommodationsCreated,
+      pricingCreated,
+      pricingSkipped,
     });
   } finally {
     await payload.destroy();

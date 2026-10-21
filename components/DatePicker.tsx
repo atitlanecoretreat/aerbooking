@@ -10,7 +10,7 @@ export interface SelectedDates {
 
 interface DatePickerProps {
   durationDays: number;
-  startDayRestriction: "sunday_only" | "any";
+  startDayRestriction: "sunday_only" | "sunday_to_thursday" | "any";
   accommodationId: string;
   onDateSelect: (dates: SelectedDates | null) => void;
 }
@@ -108,6 +108,16 @@ export function DatePicker({
       return;
     }
 
+    if (startDayRestriction === "sunday_to_thursday" && startDate.getDay() > 4) {
+      setEndDate(null);
+      setIsAvailable(false);
+      setAvailabilityMessage(
+        "This retreat requires a check-in from Sunday to Thursday. Please select another day.",
+      );
+      onDateSelect(null);
+      return;
+    }
+
     const calculatedEnd = calculateEndDate(startDate);
     setEndDate(calculatedEnd);
     setIsChecking(true);
@@ -155,7 +165,9 @@ export function DatePicker({
         <p className="date-picker-note">
           {startDayRestriction === "sunday_only"
             ? "Check-ins for this retreat are strictly on Sundays."
-            : "You can check in on any day of the week."}
+            : startDayRestriction === "sunday_to_thursday"
+              ? "Check-ins for this retreat are from Sunday to Thursday."
+              : "You can check in on any day of the week."}
         </p>
 
         <div className="date-calendar">
@@ -220,7 +232,8 @@ export function DatePicker({
 
               const dateValue = toDateInputValue(date);
               const isRestrictedDay =
-                startDayRestriction === "sunday_only" && date.getDay() !== 0;
+                (startDayRestriction === "sunday_only" && date.getDay() !== 0) ||
+                (startDayRestriction === "sunday_to_thursday" && date.getDay() > 4);
 
               return (
                 <button
